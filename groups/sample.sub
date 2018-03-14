@@ -1,0 +1,7 @@
+---
+classes:
+  - sample::sub
+parameters:
+  other: value
+groups:
+  - sample

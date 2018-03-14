@@ -1,0 +1,111 @@
+#!/usr/bin/python
+
+import MySQLdb
+import os
+
+debug = False
+
+db = MySQLdb.connect(host='localhost', user='root', passwd='lastchance',db='dashboard')
+cur = db.cursor()
+
+cur.execute("select n.name, g.name from node_group_memberships as ng, nodes as n, node_groups as g where ng.node_id = n.id and ng.node_group_id = g.id and n.name = 'ie-app08.advdc.com';")
+
+for row in cur.fetchall():
+  print row
+
+
+# Ok, so the goal here is to automatically create all of the files needed for SENC based on the info currently in dashboard.
+
+# The first step of this is to extract the groups, I guess. So lets look at doing that.
+
+query = "select id, name from node_groups;"
+cur.execute(query)
+for row in sorted(cur.fetchall()):
+  (id, actualgroup) = row
+  group = actualgroup.replace(" - "," ").replace(" ",".",2).replace(" ","").lower()
+  print group
+  f = open(os.getcwd() + '/groups/' + group, 'w')
+  f.write("---\n")
+  query = "select g.name, c.name as class from node_group_class_memberships as nc, node_classes as c, node_groups as g where nc.node_class_id = c.id and nc.node_group_id = g.id and g.id = {0}".format(id);
+  cur.execute(query)
+  classes = sorted(cur.fetchall())
+  if len(classes) > 0:
+    print "Classes Found"
+    f.write("classes:\n")
+    for gclass in classes:
+      f.write("  - {0}\n".format(gclass[1]))
+  query = "select p.key, p.value from parameters as p where parameterable_id = {0} and parameterable_type = 'NodeGroup';".format(id);
+  cur.execute(query)
+  params = sorted(cur.fetchall())
+  if len(params) > 0:
+    print "Params Found"
+    f.write("parameters:\n")
+    for gparam in params:
+      (pkey, pval) = gparam
+      protected = False
+      if pval == 'yes' or pval == 'true' or pval.isdigit():
+        if debug: print "Protecting value: {0} - {1}".format(pkey, pval)
+        protected = True
+      if protected:
+        f.write("  {0}: '{1}'\n".format(pkey, pval))
+      else:
+        f.write("  {0}: {1}\n".format(pkey, pval))
+  query = "select g.name from node_group_edges as ge, node_groups as g where ge.from_id = {0} and ge.to_id = g.id;".format(id);
+  cur.execute(query)
+  groups = sorted(cur.fetchall())
+  if len(groups) > 0:
+    print "Groups found"
+    f.write("groups:\n")
+    for actualpgroup in groups:
+      pgroup = actualpgroup[0].replace(" - "," ").replace(" ",".",2).replace(" ","").lower()
+      f.write("  - {0}\n".format(pgroup))
+  f.close()
+  print
+  
+# Awesome, now we need to get the nodes pulled out.
+
+query = "select id, name from nodes;"
+cur.execute(query)
+for row in sorted(cur.fetchall()):
+  (id, node) = row
+  print "{0} : {1}".format(id, node)
+  f = open(os.getcwd() + '/nodes/' + node, 'w')
+  f.write("---\n")
+
+
+  query = "select n.name, c.name as class from node_class_memberships as nc, node_classes as c, nodes as n where nc.node_class_id = c.id and nc.node_id = n.id and n.id = {0}".format(id);
+  cur.execute(query)
+  classes = sorted(cur.fetchall())
+  if len(classes) > 0:
+    print "Classes Found"
+    f.write("classes:\n")
+    for gclass in classes:
+      f.write("  - {0}\n".format(gclass[1]))
+  query = "select p.key, p.value from parameters as p where parameterable_id = {0} and parameterable_type = 'Node';".format(id);
+  cur.execute(query)
+  params = sorted(cur.fetchall())
+  if len(params) > 0:
+    print "Params Found"
+    f.write("parameters:\n")
+    for gparam in params:
+      (pkey, pval) = gparam
+      protected = False
+      if pval == 'yes' or pval == 'true' or pval.isdigit():
+        if debug: print "Protecting value: {0} - {1}".format(pkey, pval)
+        protected = True
+      if protected:
+        f.write("  {0}: '{1}'\n".format(gparam[0], gparam[1]))
+      else:
+        f.write("  {0}: {1}\n".format(gparam[0], gparam[1]))
+  query = "select g.name from node_group_memberships as ng, node_groups as g where g.id = ng.node_group_id and ng.node_id = {0};".format(id)
+  cur.execute(query)
+  groups = sorted(cur.fetchall())
+  if len(groups) > 0:
+    print "Groups found"
+    f.write("groups:\n")
+    for actualpgroup in groups:
+      pgroup = actualpgroup[0].replace(" - "," ").replace(" ",".",2).replace(" ","").lower()
+      f.write("  - {0}\n".format(pgroup))
+
+  f.close()
+
