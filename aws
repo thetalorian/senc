@@ -1,0 +1,3 @@
+---
+cli: /usr/local/bin/aws
+tag: puppetgroups

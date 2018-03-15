@@ -77,11 +77,11 @@ def guess_classification(requestednode):
   data['classes'] = []
   data['parameters'] = {}
   data['groups'] = []
+  spath = os.path.dirname(os.path.realpath(__file__))
 
   # Read YAML file "matches"
   try:
     if debug: print "Loading Name-based Assignment Config"
-    spath = os.path.dirname(os.path.realpath(__file__))
     f = open(spath + '/matches')
     matchdata = yaml.safe_load(f)
     f.close()
@@ -96,6 +96,35 @@ def guess_classification(requestednode):
     if foundmatch: 
       data['groups'].append(match) 
 
+  # Check if AWS
+  pattern = re.compile("i-[a-f0-9]{6,}")
+  instanceid = pattern.search(requestednode)
+  if instanceid:
+    try:
+      if debug: print "Looking for AWS info."
+      f = open(spath + '/aws')
+      awsconfig = yaml.safe_load(f)
+      f.close()
+    except IOError:
+      print "Unable to accees AWS config in file 'aws'."
+      return data
+    if not 'cli' in awsconfig:
+      if debug: print "AWS CLI not specified in 'aws' config file. Please add 'cli: <path to cli>'."
+      return data
+    awscli = awsconfig['cli']
+    if not os.path.isfile(awscli):
+      if debug: print "CLI specified in 'aws' config file does not exist."
+      return data
+    if not 'tag' in awsconfig:
+      if debug: print "Group tag not specified in 'aws' config file. Please add 'tag: <yourtag>'."
+      return data
+    grouptag = awsconfig['tag']
+    p = subprocess.Popen([awscli, "ec2", "describe-instances", "--instance-id", instanceid.group(0), "--query", "Reservations[*].Instances[*].[Tags[?Key==`" + grouptag + "`].Value]", "--output", "text"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    taglist, err = p.communicate()
+    if taglist != "":
+      tags = taglist.rstrip().split(',')
+      for tag in tags:
+        data['groups'].append(tag)
   return data
 
 def get_classification(requestednode):
